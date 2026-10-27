@@ -3,3 +3,4 @@ node_modules
 next-env.d.ts
 *.tsbuildinfo
 npm-debug.log*
+e2e

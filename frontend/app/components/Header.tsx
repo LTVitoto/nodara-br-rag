@@ -1,0 +1,54 @@
+"use client";
+
+import { useI18n } from "../i18n";
+import { LanguageSwitcher } from "./LanguageSwitcher";
+
+export type Probe = { ok: boolean; error?: string } & Record<string, unknown>;
+export type Status = { knowledge_base: Probe; s4hana_live: Probe; lakehouse_cdc: Probe; llm: Probe };
+
+function Pill({ id, label, probe, detail }: { id: string; label: string; probe?: Probe; detail: (p: Probe) => string }) {
+  const { t } = useI18n();
+  const tone = !probe
+    ? "border-slate-700 text-slate-400"
+    : probe.ok
+      ? "border-emerald-700 text-emerald-300"
+      : "border-amber-700 text-amber-300";
+  return (
+    <div className={`rounded-lg border px-3 py-2 text-xs ${tone}`}>
+      <div data-testid={`status-${id}`} className="font-semibold uppercase tracking-wide">{label}</div>
+      <div className="mt-0.5 text-slate-300">{!probe ? t.status.checking : probe.ok ? detail(probe) : t.status.unavailable}</div>
+    </div>
+  );
+}
+
+export function Header({ status }: { status?: Status }) {
+  const { t } = useI18n();
+  return (
+    <header className="flex flex-col gap-4">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-400">Nodara BR-RAG</p>
+          <h1 className="text-2xl font-bold">{t.header.title}</h1>
+          <p className="text-sm text-slate-400">{t.header.subtitle}</p>
+        </div>
+        <LanguageSwitcher />
+      </div>
+      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+        <Pill id="s4" label={t.status.s4} probe={status?.s4hana_live} detail={(p) => t.status.s4Detail(p.matdoc_rows)} />
+        <Pill id="cdc" label={t.status.cdc} probe={status?.lakehouse_cdc} detail={(p) => t.status.cdcDetail(p.events, p.last_lag_ms)} />
+        <Pill
+          id="manuals"
+          label={t.status.manuals}
+          probe={status?.knowledge_base}
+          detail={(p) => t.status.manualsDetail(p.embedded, p.chunks)}
+        />
+        <Pill
+          id="llm"
+          label={t.status.llm}
+          probe={status?.llm}
+          detail={(p) => (p.chat_ready && p.embed_ready ? String(p.chat_model) : t.status.pendingModels)}
+        />
+      </div>
+    </header>
+  );
+}

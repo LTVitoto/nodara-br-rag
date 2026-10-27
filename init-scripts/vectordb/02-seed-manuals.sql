@@ -2,17 +2,19 @@
 -- Seed corpus · SYNTHETIC technical manuals (English) — simulation only.
 -- Equipment, part numbers and limits are fictional; do not use for real maintenance.
 -- Embeddings stay NULL until the backend runs POST /api/v1/kb/embed (make embed).
+-- Originals live in knowledge/raw-manuals/au/ → s3://raw-manuals/au/ (minio-init). Chunk text must
+-- stay byte-identical to the original: `make smoke` verifies index ⊆ raw (lineage check).
 -- ═══════════════════════════════════════════════════════════════════════════
 
-INSERT INTO kb.documents (doc_id, title, equipment, doc_type, issuing_site, revision, classification) VALUES
-    ('AU-HT400-HYD-001',  'HT-400 Ultra-Class Haul Truck - Hydraulic System Service',            'HT-400 haul truck',        'maintenance_procedure', 'Pilbara Operations, WA (AU)', 'Rev C 2025-11', 'SYNTHETIC-SIMULATION'),
-    ('AU-HT400-TYR-002',  'HT-400 OTR Tyre Inspection and Change-out Standard',                   'HT-400 haul truck',        'inspection_standard',   'Pilbara Operations, WA (AU)', 'Rev B 2025-06', 'SYNTHETIC-SIMULATION'),
-    ('AU-SM40-LIN-003',   'SAG Mill SM-40 - Shell Liner Change-out Procedure',                    'SM-40 SAG mill',           'maintenance_procedure', 'Pilbara Processing Plant (AU)', 'Rev D 2025-09', 'SYNTHETIC-SIMULATION'),
-    ('AU-CV12-BLT-004',   'Overland Conveyor CV-12 - Belt Splice Inspection and Repair',          'CV-12 overland conveyor',  'inspection_standard',   'Pilbara Processing Plant (AU)', 'Rev A 2025-03', 'SYNTHETIC-SIMULATION'),
-    ('AU-SP250-SEAL-005', 'Slurry Pump SP-250 - Mechanical Seal Replacement',                     'SP-250 slurry pump',       'maintenance_procedure', 'Pilbara Processing Plant (AU)', 'Rev B 2025-08', 'SYNTHETIC-SIMULATION'),
-    ('AU-ES4100-RPE-006', 'Electric Rope Shovel ES-4100 - Hoist Rope Inspection and Discard Criteria', 'ES-4100 rope shovel', 'inspection_standard',   'Pilbara Operations, WA (AU)', 'Rev C 2025-10', 'SYNTHETIC-SIMULATION'),
-    ('AU-SAFE-LOTO-007',  'Site Standard - Energy Isolation, Lock-Out/Tag-Out and Verification',  'All equipment',            'safety_standard',       'Pilbara Operations, WA (AU)', 'Rev F 2025-12', 'SYNTHETIC-SIMULATION'),
-    ('AU-HT400-FSS-008',  'HT-400 Fire Suppression System - Inspection and Cartridge Replacement', 'HT-400 haul truck',       'maintenance_procedure', 'Pilbara Operations, WA (AU)', 'Rev A 2025-07', 'SYNTHETIC-SIMULATION');
+INSERT INTO kb.documents (doc_id, title, equipment, doc_type, issuing_site, revision, classification, source_uri) VALUES
+    ('AU-HT400-HYD-001',  'HT-400 Ultra-Class Haul Truck - Hydraulic System Service',            'HT-400 haul truck',        'maintenance_procedure', 'Pilbara Operations, WA (AU)', 'Rev C 2025-11', 'SYNTHETIC-SIMULATION', 's3://raw-manuals/au/AU-HT400-HYD-001.md'),
+    ('AU-HT400-TYR-002',  'HT-400 OTR Tyre Inspection and Change-out Standard',                   'HT-400 haul truck',        'inspection_standard',   'Pilbara Operations, WA (AU)', 'Rev B 2025-06', 'SYNTHETIC-SIMULATION', 's3://raw-manuals/au/AU-HT400-TYR-002.md'),
+    ('AU-SM40-LIN-003',   'SAG Mill SM-40 - Shell Liner Change-out Procedure',                    'SM-40 SAG mill',           'maintenance_procedure', 'Pilbara Processing Plant (AU)', 'Rev D 2025-09', 'SYNTHETIC-SIMULATION', 's3://raw-manuals/au/AU-SM40-LIN-003.md'),
+    ('AU-CV12-BLT-004',   'Overland Conveyor CV-12 - Belt Splice Inspection and Repair',          'CV-12 overland conveyor',  'inspection_standard',   'Pilbara Processing Plant (AU)', 'Rev A 2025-03', 'SYNTHETIC-SIMULATION', 's3://raw-manuals/au/AU-CV12-BLT-004.md'),
+    ('AU-SP250-SEAL-005', 'Slurry Pump SP-250 - Mechanical Seal Replacement',                     'SP-250 slurry pump',       'maintenance_procedure', 'Pilbara Processing Plant (AU)', 'Rev B 2025-08', 'SYNTHETIC-SIMULATION', 's3://raw-manuals/au/AU-SP250-SEAL-005.md'),
+    ('AU-ES4100-RPE-006', 'Electric Rope Shovel ES-4100 - Hoist Rope Inspection and Discard Criteria', 'ES-4100 rope shovel', 'inspection_standard',   'Pilbara Operations, WA (AU)', 'Rev C 2025-10', 'SYNTHETIC-SIMULATION', 's3://raw-manuals/au/AU-ES4100-RPE-006.md'),
+    ('AU-SAFE-LOTO-007',  'Site Standard - Energy Isolation, Lock-Out/Tag-Out and Verification',  'All equipment',            'safety_standard',       'Pilbara Operations, WA (AU)', 'Rev F 2025-12', 'SYNTHETIC-SIMULATION', 's3://raw-manuals/au/AU-SAFE-LOTO-007.md'),
+    ('AU-HT400-FSS-008',  'HT-400 Fire Suppression System - Inspection and Cartridge Replacement', 'HT-400 haul truck',       'maintenance_procedure', 'Pilbara Operations, WA (AU)', 'Rev A 2025-07', 'SYNTHETIC-SIMULATION', 's3://raw-manuals/au/AU-HT400-FSS-008.md');
 
 INSERT INTO kb.part_xref (oem_part_no, matnr, description_en, description_pt, base_uom) VALUES
     ('HF-7720',        '100000101', 'Hydraulic return filter element, HT-400',     'Filtro hidráulico de retorno HT-400',            'PC'),

@@ -141,18 +141,22 @@ services:
     networks: [nodara-net, nodara-edge]
 
   minio-init:
+    # Buckets `lakehouse` + `raw-manuals` (originales versionados) y su registro en Unity Catalog.
     image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
     container_name: nodara-minio-init
     depends_on:
       minio: { condition: service_healthy }
+      unity-catalog: { condition: service_healthy }
     entrypoint: ["/bin/sh", "/opt/nodara/init-lakehouse.sh"]
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:?run make env}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?run make env}
       LAKEHOUSE_S3_ACCESS_KEY: ${LAKEHOUSE_S3_ACCESS_KEY:?run make env}
       LAKEHOUSE_S3_SECRET_KEY: ${LAKEHOUSE_S3_SECRET_KEY:?run make env}
+      UC_API: http://unity-catalog:8080/api/2.1/unity-catalog
     volumes:
       - ./lakehouse/minio/init-lakehouse.sh:/opt/nodara/init-lakehouse.sh:ro
+      - ./knowledge/raw-manuals:/seed/raw-manuals:ro
     restart: "no"
     networks: [nodara-net]
 
@@ -330,6 +334,19 @@ services:
       retries: 12
       start_period: 10s
     networks: [nodara-net, nodara-edge]
+
+  ui-test:
+    # QA de UI bajo demanda (perfil "qa", `make ui-test`): Playwright contra el frontend real.
+    build: ./frontend/e2e
+    image: nodara/ui-test:0.1.0
+    profiles: ["qa"]
+    depends_on:
+      frontend: { condition: service_healthy }
+    environment:
+      BASE_URL: http://frontend:3000
+    shm_size: 512m
+    restart: "no"
+    networks: [nodara-edge]
 
 networks:
   nodara-net:

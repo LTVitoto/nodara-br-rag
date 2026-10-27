@@ -9,7 +9,7 @@ from .settings import get_settings
 _pool: ConnectionPool | None = None
 
 SEARCH_SQL = """
-    SELECT c.chunk_id, c.doc_id, d.title, d.equipment, c.section, c.content, c.sap_materials,
+    SELECT c.chunk_id, c.doc_id, d.title, d.equipment, d.source_uri, c.section, c.content, c.sap_materials,
            1 - (c.embedding <=> %(q)s::vector) AS similarity
       FROM kb.chunks c
       JOIN kb.documents d ON d.doc_id = c.doc_id

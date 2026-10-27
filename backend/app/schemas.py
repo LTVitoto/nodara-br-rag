@@ -13,6 +13,7 @@ class Source(BaseModel):
     doc_id: str
     title: str
     equipment: str
+    source_uri: str  # lineage: original document in the raw layer (s3://raw-manuals/...)
     section: str
     similarity: float
     excerpt: str

@@ -16,6 +16,7 @@ CREATE TABLE kb.documents (
     revision       text NOT NULL,
     language       char(2) NOT NULL DEFAULT 'en',
     classification text NOT NULL,
+    source_uri     text NOT NULL UNIQUE CHECK (source_uri LIKE 's3://raw-manuals/%'),  -- lineage → raw layer (MinIO)
     loaded_at      timestamptz NOT NULL DEFAULT now()
 );
 
