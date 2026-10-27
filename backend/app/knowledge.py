@@ -9,13 +9,22 @@ from .settings import get_settings
 _pool: ConnectionPool | None = None
 
 SEARCH_SQL = """
-    SELECT c.chunk_id, c.doc_id, d.title, d.equipment, d.source_uri, c.section, c.content, c.sap_materials,
+    SELECT c.chunk_id, c.doc_id, d.title, d.applies_to, d.source_uri, c.section, c.content, c.sap_refs,
            1 - (c.embedding <=> %(q)s::vector) AS similarity
       FROM kb.chunks c
       JOIN kb.documents d ON d.doc_id = c.doc_id
      WHERE c.embedding IS NOT NULL
      ORDER BY c.embedding <=> %(q)s::vector
      LIMIT %(k)s
+"""
+
+DOCUMENTS_SQL = """
+    SELECT c.chunk_id, c.doc_id, d.title, d.applies_to, d.source_uri, c.section, c.content, c.sap_refs,
+           1 - (c.embedding <=> %(q)s::vector) AS similarity
+      FROM kb.chunks c
+      JOIN kb.documents d ON d.doc_id = c.doc_id
+     WHERE c.doc_id = ANY(%(docs)s) AND c.embedding IS NOT NULL
+     ORDER BY array_position(%(docs)s, c.doc_id), c.chunk_no
 """
 
 
@@ -44,6 +53,12 @@ def search(embedding: list[float], k: int) -> list[dict]:
         return conn.execute(SEARCH_SQL, {"q": _vector(embedding), "k": k}).fetchall()
 
 
+def document_chunks(doc_ids: list[str], embedding: list[float]) -> list[dict]:
+    """Every section of the given manuals, in reading order (small-to-big retrieval)."""
+    with _pool.connection() as conn:
+        return conn.execute(DOCUMENTS_SQL, {"q": _vector(embedding), "docs": doc_ids}).fetchall()
+
+
 def pending_chunks() -> list[dict]:
     with _pool.connection() as conn:
         return conn.execute(
@@ -62,7 +77,7 @@ def save_embeddings(rows: list[tuple[int, list[float]]], model: str) -> None:
 def part_descriptions(matnrs: list[str]) -> dict[str, dict]:
     with _pool.connection() as conn:
         rows = conn.execute(
-            "SELECT matnr, oem_part_no, description_en, description_pt, base_uom "
+            "SELECT matnr, oem_part_no, description_en, description_es, description_pt, base_uom "
             "FROM kb.part_xref WHERE matnr = ANY(%s)", (matnrs,)).fetchall()
     return {row["matnr"]: row for row in rows}
 

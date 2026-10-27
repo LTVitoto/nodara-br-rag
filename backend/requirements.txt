@@ -7,3 +7,4 @@ trino==0.340.0
 langchain-core==1.7.0
 langchain-ollama==1.1.0
 httpx==0.28.1
+langdetect==1.0.9

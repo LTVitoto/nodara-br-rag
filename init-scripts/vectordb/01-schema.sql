@@ -1,6 +1,6 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 -- Nodara BR-RAG · Knowledge base (isolated pgvector instance — manuals only)
--- English technical manuals from Australian operations, chunked for retrieval.
+-- Corporate manuals from Australian operations (English), chunked for retrieval.
 -- Embeddings are produced in-enclave by the backend (Ollama nomic-embed-text,
 -- 768-d): no external embedding APIs (air-gap). No CDC, no Trino catalog.
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -10,8 +10,8 @@ CREATE SCHEMA kb;
 CREATE TABLE kb.documents (
     doc_id         text PRIMARY KEY,
     title          text NOT NULL,
-    equipment      text NOT NULL,
-    doc_type       text NOT NULL CHECK (doc_type IN ('maintenance_procedure', 'inspection_standard', 'safety_standard')),
+    applies_to     text NOT NULL,
+    doc_type       text NOT NULL CHECK (doc_type IN ('compliance_standard', 'standard_operating_procedure', 'technical_strategy')),
     issuing_site   text NOT NULL,
     revision       text NOT NULL,
     language       char(2) NOT NULL DEFAULT 'en',
@@ -25,17 +25,20 @@ CREATE TABLE kb.part_xref (
     oem_part_no    text PRIMARY KEY,
     matnr          varchar(40) NOT NULL UNIQUE,
     description_en text NOT NULL,
+    description_es text NOT NULL,
     description_pt text NOT NULL,
     base_uom       varchar(3) NOT NULL
 );
 
+-- sap_refs: SAP entities the backend resolves live via Trino for this chunk:
+--   {"materials": [MATNR...], "cost_centers": [KOSTL...], "scopes": ["counterparty_credit"]}
 CREATE TABLE kb.chunks (
     chunk_id        bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     doc_id          text NOT NULL REFERENCES kb.documents (doc_id),
     chunk_no        int NOT NULL,
     section         text NOT NULL,
     content         text NOT NULL,
-    sap_materials   varchar(40)[] NOT NULL DEFAULT '{}',
+    sap_refs        jsonb NOT NULL DEFAULT '{}' CHECK (jsonb_typeof(sap_refs) = 'object'),
     embedding       vector(768),
     embedding_model text,
     embedded_at     timestamptz,

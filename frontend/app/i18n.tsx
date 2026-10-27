@@ -15,8 +15,8 @@ const pt = {
   languageName: "Português",
   documentTitle: "Nodara BR-RAG · Inteligência Operacional",
   header: {
-    title: "Inteligência Operacional de Manutenção",
-    subtitle: "Manuais técnicos da Austrália × SAP S/4HANA Brasil em tempo real · IA local air-gapped",
+    title: "Inteligência Operacional",
+    subtitle: "Padrões corporativos da Austrália × SAP S/4HANA Brasil em tempo real · IA local air-gapped",
     language: "Idioma",
   },
   status: {
@@ -33,21 +33,31 @@ const pt = {
   },
   form: {
     label: "Pergunta do operador",
-    placeholder: "Descreva o problema ou o procedimento que precisa executar…",
+    placeholder: "Descreva a situação ou o procedimento que precisa executar…",
     submit: "Perguntar",
     loading: "Consultando manuais e SAP…",
     examples: [
-      "Como trocar o filtro hidráulico de retorno do caminhão HT-400? Temos o filtro em estoque?",
-      "Quais são os critérios de descarte do cabo de elevação da escavadeira ES-4100?",
-      "Qual o procedimento para trocar o selo mecânico da bomba de polpa SP-250?",
-      "Qual a pressão de calibragem dos pneus do HT-400 e quantos pneus temos disponíveis?",
+      {
+        label: "Compliance · cliente bloqueado",
+        question: "O cliente refinador está bloqueado por limite de crédito. O que preciso para regularizá-lo segundo o padrão KYC?",
+      },
+      {
+        label: "Lixiviação · bomba de ácido",
+        question: "A bomba de ácido da lixiviação falhou após a tempestade tropical. Já existe ordem aberta e temos a peça SKU-BR-ACID-9902 em estoque?",
+      },
+      {
+        label: "Flotação · dosagem de xantato",
+        question: "O teor do minério caiu. Como ajustar a dosagem de xantato para 15 g/t e o estoque do Depósito 002 é suficiente?",
+      },
     ],
   },
   answer: {
     title: "Resposta",
-    empty: "Faça uma pergunta para receber o procedimento traduzido e cruzado com o SAP.",
+    empty: "Faça uma pergunta para receber o procedimento corporativo cruzado com os dados do SAP.",
     search: "Busca (EN)",
-    languageNote: "",
+    language: "Idioma da resposta",
+    corrected: "ajustado pelo controle de idioma",
+    transactions: "Transações SAP do procedimento",
   },
   stock: {
     title: "Estoque SAP (tempo real)",
@@ -55,13 +65,35 @@ const pt = {
     material: "Material",
     location: "Local",
     quantity: "Qtd.",
+    coverage: (days: unknown) => `cobertura ${days} dias`,
+  },
+  orders: {
+    title: "Ordens de manutenção (SAP PM)",
+    released: "Liberada",
+    created: "Criada",
+    costCenter: "Centro de custo",
+    notification: "Nota",
+    breakdown: "parada",
+    reservation: (qty: unknown, uom: unknown, matnr: unknown) => `Reserva aberta: ${qty} ${uom} de ${matnr}`,
+  },
+  credit: {
+    title: "Crédito de contrapartes (SAP)",
+    blocked: "BLOQUEADO",
+    active: "Ativo",
+    limit: "Limite",
+    exposure: "Exposição",
+    overdue: "Vencido",
+    days: (days: unknown) => `${days} dias de atraso`,
+    cnpj: "CNPJ",
+    ie: "Inscrição Estadual",
   },
   sources: {
-    title: "Manuais técnicos (fontes AU)",
+    title: "Manuais corporativos (fontes AU)",
     empty: "Os trechos de manuais usados na resposta aparecerão aqui.",
     similarity: "similaridade",
   },
-  storage: { "0001": "Almoxarifado central", "0002": "Oficina" } as Record<string, string>,
+  plants: { BR10: "Usina de Flotação · Carajás (PA)", BR20: "Usina de Lixiviação · Carajás (PA)" } as Record<string, string>,
+  storage: { "BR10/0002": "Depósito 002 · Reagentes", "BR20/0001": "Almoxarifado central" } as Record<string, string>,
 };
 
 export type Dictionary = typeof pt;
@@ -71,8 +103,8 @@ const es: Dictionary = {
   languageName: "Español",
   documentTitle: "Nodara BR-RAG · Inteligencia Operacional",
   header: {
-    title: "Inteligencia Operacional de Mantenimiento",
-    subtitle: "Manuales técnicos de Australia × SAP S/4HANA Brasil en tiempo real · IA local air-gapped",
+    title: "Inteligencia Operacional",
+    subtitle: "Estándares corporativos de Australia × SAP S/4HANA Brasil en tiempo real · IA local air-gapped",
     language: "Idioma",
   },
   status: {
@@ -89,21 +121,31 @@ const es: Dictionary = {
   },
   form: {
     label: "Pregunta del operador",
-    placeholder: "Describe el problema o el procedimiento que necesitas ejecutar…",
+    placeholder: "Describe la situación o el procedimiento que necesitas ejecutar…",
     submit: "Preguntar",
     loading: "Consultando manuales y SAP…",
     examples: [
-      "¿Cómo cambio el filtro hidráulico de retorno del camión HT-400? ¿Tenemos el filtro en stock?",
-      "¿Cuáles son los criterios de descarte del cable de izaje de la pala ES-4100?",
-      "¿Cuál es el procedimiento para cambiar el sello mecánico de la bomba de pulpa SP-250?",
-      "¿Cuál es la presión de inflado de los neumáticos del HT-400 y cuántos tenemos disponibles?",
+      {
+        label: "Compliance · cliente bloqueado",
+        question: "El cliente refinador está bloqueado por límite de crédito. ¿Qué necesito para regularizarlo según el estándar KYC?",
+      },
+      {
+        label: "Lixiviación · bomba de ácido",
+        question: "La bomba de ácido de lixiviación falló tras la tormenta tropical. ¿Ya hay una orden abierta y tenemos el repuesto SKU-BR-ACID-9902?",
+      },
+      {
+        label: "Flotación · dosis de xantato",
+        question: "Cayó la ley del mineral. ¿Cómo ajusto la dosis de xantato a 15 g/t y alcanza el stock del Depósito 002?",
+      },
     ],
   },
   answer: {
     title: "Respuesta",
-    empty: "Haz una pregunta para recibir el procedimiento traducido y cruzado con SAP.",
+    empty: "Haz una pregunta para recibir el procedimiento corporativo cruzado con los datos de SAP.",
     search: "Búsqueda (EN)",
-    languageNote: "Las respuestas del asistente se generan en portugués (pt-BR).",
+    language: "Idioma de la respuesta",
+    corrected: "ajustado por el control de idioma",
+    transactions: "Transacciones SAP del procedimiento",
   },
   stock: {
     title: "Stock SAP (tiempo real)",
@@ -111,13 +153,35 @@ const es: Dictionary = {
     material: "Material",
     location: "Ubicación",
     quantity: "Cant.",
+    coverage: (days) => `cobertura ${days} días`,
+  },
+  orders: {
+    title: "Órdenes de mantenimiento (SAP PM)",
+    released: "Liberada",
+    created: "Creada",
+    costCenter: "Centro de costo",
+    notification: "Aviso",
+    breakdown: "avería",
+    reservation: (qty, uom, matnr) => `Reserva abierta: ${qty} ${uom} de ${matnr}`,
+  },
+  credit: {
+    title: "Crédito de contrapartes (SAP)",
+    blocked: "BLOQUEADO",
+    active: "Activo",
+    limit: "Límite",
+    exposure: "Exposición",
+    overdue: "Vencido",
+    days: (days) => `${days} días de atraso`,
+    cnpj: "CNPJ",
+    ie: "Inscripción Estatal (IE)",
   },
   sources: {
-    title: "Manuales técnicos (fuentes AU)",
+    title: "Manuales corporativos (fuentes AU)",
     empty: "Aquí aparecerán los fragmentos de manual usados en la respuesta.",
     similarity: "similitud",
   },
-  storage: { "0001": "Almacén central", "0002": "Taller" },
+  plants: { BR10: "Planta de Flotación · Carajás (PA)", BR20: "Planta de Lixiviación · Carajás (PA)" },
+  storage: { "BR10/0002": "Depósito 002 · Reactivos", "BR20/0001": "Almacén central" },
 };
 
 const en: Dictionary = {
@@ -125,8 +189,8 @@ const en: Dictionary = {
   languageName: "English",
   documentTitle: "Nodara BR-RAG · Operational Intelligence",
   header: {
-    title: "Maintenance Operational Intelligence",
-    subtitle: "Australian technical manuals × SAP S/4HANA Brazil in real time · air-gapped local AI",
+    title: "Operational Intelligence",
+    subtitle: "Australian corporate standards × SAP S/4HANA Brazil in real time · air-gapped local AI",
     language: "Language",
   },
   status: {
@@ -143,21 +207,31 @@ const en: Dictionary = {
   },
   form: {
     label: "Operator question",
-    placeholder: "Describe the problem or the procedure you need to perform…",
+    placeholder: "Describe the situation or the procedure you need to perform…",
     submit: "Ask",
     loading: "Searching manuals and SAP…",
     examples: [
-      "How do I replace the hydraulic return filter on the HT-400 truck? Do we have the filter in stock?",
-      "What are the discard criteria for the ES-4100 shovel hoist rope?",
-      "What is the procedure to replace the mechanical seal of the SP-250 slurry pump?",
-      "What is the HT-400 tyre inflation pressure and how many tyres do we have available?",
+      {
+        label: "Compliance · blocked customer",
+        question: "The refinery customer is blocked by its credit limit. What do I need to regularize it under the KYC standard?",
+      },
+      {
+        label: "Leaching · acid pump",
+        question: "The leaching acid pump failed after the tropical storm. Is there already an open order and do we have spare SKU-BR-ACID-9902?",
+      },
+      {
+        label: "Flotation · xanthate dosage",
+        question: "The ore grade dropped. How do I adjust the xanthate dosage to 15 g/t and is the Depot 002 stock enough?",
+      },
     ],
   },
   answer: {
     title: "Answer",
-    empty: "Ask a question to get the procedure translated and cross-checked against SAP.",
+    empty: "Ask a question to get the corporate procedure cross-checked against SAP data.",
     search: "Search (EN)",
-    languageNote: "Assistant answers are generated in Portuguese (pt-BR).",
+    language: "Answer language",
+    corrected: "adjusted by the language guard",
+    transactions: "SAP transactions of the procedure",
   },
   stock: {
     title: "SAP stock (real time)",
@@ -165,13 +239,35 @@ const en: Dictionary = {
     material: "Material",
     location: "Location",
     quantity: "Qty",
+    coverage: (days) => `coverage ${days} days`,
+  },
+  orders: {
+    title: "Maintenance orders (SAP PM)",
+    released: "Released",
+    created: "Created",
+    costCenter: "Cost center",
+    notification: "Notification",
+    breakdown: "breakdown",
+    reservation: (qty, uom, matnr) => `Open reservation: ${qty} ${uom} of ${matnr}`,
+  },
+  credit: {
+    title: "Counterparty credit (SAP)",
+    blocked: "BLOCKED",
+    active: "Active",
+    limit: "Limit",
+    exposure: "Exposure",
+    overdue: "Overdue",
+    days: (days) => `${days} days past due`,
+    cnpj: "CNPJ",
+    ie: "State registration (IE)",
   },
   sources: {
-    title: "Technical manuals (AU sources)",
+    title: "Corporate manuals (AU sources)",
     empty: "Manual excerpts used in the answer will appear here.",
     similarity: "similarity",
   },
-  storage: { "0001": "Central warehouse", "0002": "Workshop" },
+  plants: { BR10: "Flotation plant · Carajás (PA)", BR20: "Leaching plant · Carajás (PA)" },
+  storage: { "BR10/0002": "Depot 002 · Reagents", "BR20/0001": "Central warehouse" },
 };
 
 export const DICTIONARIES: Record<Language, Dictionary> = { es, en, pt };

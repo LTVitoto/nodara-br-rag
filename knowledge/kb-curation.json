@@ -1,0 +1,26 @@
+{
+  "_comment": "KB curation: links each original manual (knowledge/raw-manuals) to the SAP S/4HANA entities that the backend resolves live through Trino, plus the OEM part number ↔ SAP material mapping. Input of scripts/build-kb-seed.py (make kb-seed).",
+  "documents": {
+    "AU-CMP-KYC-001": {"sap_refs": {"scopes": ["counterparty_credit"]}},
+    "AU-LIX-SOP-002": {"sap_refs": {"materials": ["SKU-BR-ACID-9902"], "cost_centers": ["CC-LIX-01"]}},
+    "AU-FLO-STR-003": {"sap_refs": {"materials": ["SKU-BR-REAG-4410"]}}
+  },
+  "part_xref": [
+    {
+      "oem_part_no": "APX-450-SIK",
+      "matnr": "SKU-BR-ACID-9902",
+      "base_uom": "PC",
+      "description_en": "Acid pump mechanical seal and impeller kit (APX-450)",
+      "description_es": "Kit de sello mecánico e impulsor para bomba de ácido (APX-450)",
+      "description_pt": "Kit de selo mecânico e impulsor para bomba de ácido (APX-450)"
+    },
+    {
+      "oem_part_no": "SIPX",
+      "matnr": "SKU-BR-REAG-4410",
+      "base_uom": "KG",
+      "description_en": "Sodium isopropyl xanthate (SIPX), flotation collector",
+      "description_es": "Xantato isopropílico de sodio (SIPX), colector de flotación",
+      "description_pt": "Xantato isopropílico de sódio (SIPX), coletor de flotação"
+    }
+  ]
+}

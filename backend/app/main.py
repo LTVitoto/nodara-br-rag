@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 from contextlib import asynccontextmanager
 from typing import Annotated
 
@@ -20,6 +21,7 @@ log = logging.getLogger("backend")
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     knowledge.open_pool()
+    threading.Thread(target=llm.warm_up, name="model-warm-up", daemon=True).start()
     yield
     knowledge.close_pool()
 
@@ -76,10 +78,11 @@ def embed_knowledge_base() -> EmbedResponse:
 
 @app.post("/api/v1/ask", response_model=AskResponse)
 def ask(request: AskRequest) -> dict:
-    return answer_question(request.question, request.top_k)
+    """RAG answer in the requested language (ES / EN / PT), cross-checked with live SAP data."""
+    return answer_question(request.question, request.language, request.top_k)
 
 
 @app.get("/api/v1/sap/stock")
 def stock(matnr: Annotated[list[str], Query()]) -> dict:
     """Live stock for the given SAP materials (federated query, no copies)."""
-    return {"stock": lakehouse.live_stock(matnr[:20])}
+    return {"stock": lakehouse.material_stock(matnr[:20])}
