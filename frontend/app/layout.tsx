@@ -1,18 +1,25 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 
+import { DICTIONARIES, LANGUAGE_COOKIE, parseLanguage } from "./dictionaries";
 import { LanguageProvider } from "./i18n";
 import "./globals.css";
 
-export const metadata: Metadata = {
-  title: "Nodara BR-RAG · Inteligência Operacional",
-  description: "Manuais técnicos (AU) × SAP S/4HANA (BR) em tempo real, com IA local air-gapped.",
-};
+async function preferredLanguage() {
+  return parseLanguage((await cookies()).get(LANGUAGE_COOKIE)?.value);
+}
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export async function generateMetadata(): Promise<Metadata> {
+  const t = DICTIONARIES[await preferredLanguage()];
+  return { title: t.documentTitle, description: t.header.subtitle };
+}
+
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const language = await preferredLanguage();
   return (
-    <html lang="pt-BR">
+    <html lang={DICTIONARIES[language].locale}>
       <body className="min-h-screen bg-slate-950 text-slate-100 antialiased">
-        <LanguageProvider>{children}</LanguageProvider>
+        <LanguageProvider initialLanguage={language}>{children}</LanguageProvider>
       </body>
     </html>
   );

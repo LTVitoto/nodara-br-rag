@@ -2,7 +2,7 @@
 -- Seed data · SAP S/4HANA (simulated) — STRICTLY the three C-level business cases.
 -- Synthetic: no real companies or people.
 --   CASE 1 Compliance  : refiner customer blocked by its USD 5M credit limit (BUT000, UKMBP_CMS_SGM,
---                        ACDOCA open items) with Brazilian tax IDs CNPJ + IE (DFKKBPTAXNUM; XD01)
+--                        ACDOCA open items translated with TCURR) with tax IDs CNPJ + IE (DFKKBPTAXNUM; XD01)
 --   CASE 2 Leaching    : acid pump PB-LIX-02 down after a tropical storm; order already created (IW31)
 --                        on cost center CC-LIX-01, spare SKU-BR-ACID-9902 reserved with ZERO stock
 --   CASE 3 Flotation   : xanthate SKU-BR-REAG-4410 stock in Depósito 002 (BR10/0002), daily MIGO
@@ -23,20 +23,33 @@ INSERT INTO sap.dfkkbptaxnum (partner, taxtype, taxnum) VALUES
     ('0005000001', 'BR1', '11.222.333/0001-81'),   -- CNPJ
     ('0005000001', 'BR3', '123.456.789.110');      -- Inscrição Estadual
 
--- Copper concentrate sales in USD (fixed rate 5.30 BRL/USD). Exposure = open items (augbl NULL):
--- USD 5,420,000 against a USD 5,000,000 limit; USD 3,450,000 already overdue.
+-- Monthly average USD/BRL rates (type M, synthetic history). Each foreign-currency posting is
+-- translated at the rate valid on its posting date; the credit tool revalues at the LIVE rate.
+INSERT INTO sap.tcurr (kurst, fcurr, tcurr, gdatu, ukurs) VALUES
+    ('M', 'USD', 'BRL', '2026-07-01', 5.41200),
+    ('M', 'USD', 'BRL', '2026-08-01', 5.36550),
+    ('M', 'USD', 'BRL', '2026-09-01', 5.33100),
+    ('M', 'USD', 'BRL', '2026-10-01', 5.38900);
+
+-- Copper concentrate sales in USD. Exposure = open items (augbl NULL): USD 5,420,000 against a
+-- USD 5,000,000 limit; USD 3,450,000 already overdue. HSL (BRL) comes from TCURR, never a constant.
 INSERT INTO sap.acdoca (rbukrs, gjahr, belnr, docln, racct, koart, kunnr, drcrk, rwcur, wsl, rhcur, hsl,
-                        budat, netdt, blart, awtyp, awref, aworg, augbl, augdt, prctr, sgtxt, usnam) VALUES
-    ('BR01','2026','9000004101','000001','0011200000','D','0005000001','S','USD', 1250000.00,'BRL', 6625000.00,'2026-07-10','2026-08-09','RV','VBRK','9000004101','2026','1400000201','2026-08-08','PCBR10','Venda concentrado de cobre - NF 104511','FATURAMENTO'),
-    ('BR01','2026','9000004101','000002','0031100000','S',NULL,        'H','USD',-1250000.00,'BRL',-6625000.00,'2026-07-10',NULL,        'RV','VBRK','9000004101','2026',NULL,        NULL,        'PCBR10','Venda concentrado de cobre - NF 104511','FATURAMENTO'),
-    ('BR01','2026','1400000201','000001','0011100000','S',NULL,        'S','USD', 1250000.00,'BRL', 6625000.00,'2026-08-08',NULL,        'DZ','BKPF','1400000201','2026',NULL,        NULL,        'PCBR10','Recebimento NF 104511','TESOURARIA'),
-    ('BR01','2026','1400000201','000002','0011200000','D','0005000001','H','USD',-1250000.00,'BRL',-6625000.00,'2026-08-08',NULL,        'DZ','BKPF','1400000201','2026','1400000201','2026-08-08','PCBR10','Recebimento NF 104511','TESOURARIA'),
-    ('BR01','2026','9000004188','000001','0011200000','D','0005000001','S','USD', 1800000.00,'BRL', 9540000.00,'2026-08-21','2026-09-20','RV','VBRK','9000004188','2026',NULL,        NULL,        'PCBR10','Venda concentrado de cobre - NF 104598','FATURAMENTO'),
-    ('BR01','2026','9000004188','000002','0031100000','S',NULL,        'H','USD',-1800000.00,'BRL',-9540000.00,'2026-08-21',NULL,        'RV','VBRK','9000004188','2026',NULL,        NULL,        'PCBR10','Venda concentrado de cobre - NF 104598','FATURAMENTO'),
-    ('BR01','2026','9000004230','000001','0011200000','D','0005000001','S','USD', 1650000.00,'BRL', 8745000.00,'2026-09-18','2026-10-18','RV','VBRK','9000004230','2026',NULL,        NULL,        'PCBR10','Venda concentrado de cobre - NF 104655','FATURAMENTO'),
-    ('BR01','2026','9000004230','000002','0031100000','S',NULL,        'H','USD',-1650000.00,'BRL',-8745000.00,'2026-09-18',NULL,        'RV','VBRK','9000004230','2026',NULL,        NULL,        'PCBR10','Venda concentrado de cobre - NF 104655','FATURAMENTO'),
-    ('BR01','2026','9000004297','000001','0011200000','D','0005000001','S','USD', 1970000.00,'BRL',10441000.00,'2026-10-16','2026-11-15','RV','VBRK','9000004297','2026',NULL,        NULL,        'PCBR10','Venda concentrado de cobre - NF 104731','FATURAMENTO'),
-    ('BR01','2026','9000004297','000002','0031100000','S',NULL,        'H','USD',-1970000.00,'BRL',-10441000.00,'2026-10-16',NULL,       'RV','VBRK','9000004297','2026',NULL,        NULL,        'PCBR10','Venda concentrado de cobre - NF 104731','FATURAMENTO');
+                        budat, netdt, blart, awtyp, awref, aworg, augbl, augdt, prctr, sgtxt, usnam)
+SELECT 'BR01', '2026', l.belnr, l.docln, l.racct, l.koart, l.kunnr, l.drcrk, 'USD', l.wsl, 'BRL',
+       round(l.wsl * sap.fx_rate('USD', 'BRL', l.budat), 2),
+       l.budat, l.netdt, l.blart, l.awtyp, l.belnr, '2026', l.augbl, l.augdt, 'PCBR10', l.sgtxt, l.usnam
+  FROM (VALUES
+    ('9000004101','000001','0011200000','D','0005000001','S', 1250000.00, date '2026-07-10', date '2026-08-09','RV','VBRK','1400000201', date '2026-08-08','Venda concentrado de cobre - NF 104511','FATURAMENTO'),
+    ('9000004101','000002','0031100000','S',NULL,        'H',-1250000.00, date '2026-07-10', NULL,             'RV','VBRK',NULL,         NULL,             'Venda concentrado de cobre - NF 104511','FATURAMENTO'),
+    ('1400000201','000001','0011100000','S',NULL,        'S', 1250000.00, date '2026-08-08', NULL,             'DZ','BKPF',NULL,         NULL,             'Recebimento NF 104511','TESOURARIA'),
+    ('1400000201','000002','0011200000','D','0005000001','H',-1250000.00, date '2026-08-08', NULL,             'DZ','BKPF','1400000201', date '2026-08-08','Recebimento NF 104511','TESOURARIA'),
+    ('9000004188','000001','0011200000','D','0005000001','S', 1800000.00, date '2026-08-21', date '2026-09-20','RV','VBRK',NULL,         NULL,             'Venda concentrado de cobre - NF 104598','FATURAMENTO'),
+    ('9000004188','000002','0031100000','S',NULL,        'H',-1800000.00, date '2026-08-21', NULL,             'RV','VBRK',NULL,         NULL,             'Venda concentrado de cobre - NF 104598','FATURAMENTO'),
+    ('9000004230','000001','0011200000','D','0005000001','S', 1650000.00, date '2026-09-18', date '2026-10-18','RV','VBRK',NULL,         NULL,             'Venda concentrado de cobre - NF 104655','FATURAMENTO'),
+    ('9000004230','000002','0031100000','S',NULL,        'H',-1650000.00, date '2026-09-18', NULL,             'RV','VBRK',NULL,         NULL,             'Venda concentrado de cobre - NF 104655','FATURAMENTO'),
+    ('9000004297','000001','0011200000','D','0005000001','S', 1970000.00, date '2026-10-16', date '2026-11-15','RV','VBRK',NULL,         NULL,             'Venda concentrado de cobre - NF 104731','FATURAMENTO'),
+    ('9000004297','000002','0031100000','S',NULL,        'H',-1970000.00, date '2026-10-16', NULL,             'RV','VBRK',NULL,         NULL,             'Venda concentrado de cobre - NF 104731','FATURAMENTO')
+  ) AS l(belnr, docln, racct, koart, kunnr, drcrk, wsl, budat, netdt, blart, awtyp, augbl, augdt, sgtxt, usnam);
 
 -- ── CASE 2 · Leaching (PM) ──────────────────────────────────────────────────
 INSERT INTO sap.aufk (aufnr, auart, ktext, werks, kostl, equnr, erdat, ernam, phas0, phas1, phas2, phas3) VALUES

@@ -100,8 +100,9 @@ def counterparty_credit(limit: int = 5) -> list[dict]:
     and overdue amounts (ACDOCA, koart D), Brazilian tax IDs (DFKKBPTAXNUM)."""
     return query(f"""
         WITH exposure AS (
-            SELECT kunnr, rwcur,
+            SELECT kunnr, rwcur, max(rhcur) AS local_currency,
                    sum(wsl) AS open_amount,
+                   sum(hsl) AS booked_local,
                    sum(CASE WHEN netdt < current_date THEN wsl ELSE 0 END) AS overdue_amount,
                    max(CASE WHEN netdt < current_date THEN date_diff('day', netdt, current_date) END) AS max_days_overdue
               FROM s4hana.sap.acdoca
@@ -115,6 +116,7 @@ def counterparty_credit(limit: int = 5) -> list[dict]:
              GROUP BY partner)
         SELECT b.partner, b.name_org1 AS name, c.credit_sgmnt, c.credit_limit, c.currency, c.xblocked,
                c.block_reason, c.limit_valid_date, coalesce(e.open_amount, 0) AS exposure,
+               coalesce(e.booked_local, 0) AS booked_local, e.local_currency,
                coalesce(e.overdue_amount, 0) AS overdue, e.max_days_overdue, t.cnpj, t.inscricao_estadual
           FROM s4hana.sap.ukmbp_cms_sgm c
           JOIN s4hana.sap.but000 b ON b.partner = c.partner

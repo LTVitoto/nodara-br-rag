@@ -18,6 +18,16 @@ _MESSAGES: dict[str, dict[str, str]] = {
         "en": "The knowledge base has no embeddings. Run: make embed",
         "pt": "Base de conhecimento sem embeddings. Execute: make embed",
     },
+    "nim_not_configured": {
+        "es": "El motor NVIDIA NIM no está configurado (falta NVIDIA_API_KEY en .env). Usa el motor Ollama (Local).",
+        "en": "The NVIDIA NIM engine is not configured (NVIDIA_API_KEY missing in .env). Use the Ollama (Local) engine.",
+        "pt": "O motor NVIDIA NIM não está configurado (falta NVIDIA_API_KEY no .env). Use o motor Ollama (Local).",
+    },
+    "all_models_failed": {
+        "es": "Ningún modelo respondió ({models}). Revisa la conexión del gateway de salida o usa el motor local.",
+        "en": "No model answered ({models}). Check the egress gateway connection or use the local engine.",
+        "pt": "Nenhum modelo respondeu ({models}). Verifique o gateway de saída ou use o motor local.",
+    },
 }
 
 

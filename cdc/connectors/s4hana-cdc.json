@@ -11,7 +11,7 @@
   "publication.name": "nodara_s4_pub",
   "publication.autocreate.mode": "disabled",
   "slot.name": "nodara_s4_cdc",
-  "table.include.list": "sap.but000,sap.ukmbp_cms_sgm,sap.dfkkbptaxnum,sap.matdoc,sap.acdoca,sap.qmel,sap.aufk,sap.resb",
+  "table.include.list": "sap.but000,sap.ukmbp_cms_sgm,sap.dfkkbptaxnum,sap.matdoc,sap.acdoca,sap.qmel,sap.aufk,sap.resb,sap.tcurr",
   "snapshot.mode": "initial",
   "decimal.handling.mode": "precise",
   "time.precision.mode": "adaptive",

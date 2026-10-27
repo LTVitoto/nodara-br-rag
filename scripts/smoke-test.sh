@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # E2E QA of the Nodara BR-RAG stack. Exit code 0 only if every check passes.
-#   make smoke    → infrastructure, the 3 business cases, CDC→Delta, raw layer + lineage, federation,
-#                   KB, RAG per case and language (ES / EN / PT), air-gap
-#   SMOKE_RAG=0 make smoke skips the LLM calls (~2 min); they also skip until `make models` was run.
+#   make smoke    → re-seeds silently first (make fresh), then: infrastructure, the 3 business cases, TCURR + live FX,
+#                   CDC→Delta, raw layer + lineage, federation, KB, RAG per case and language (ES / EN / PT) on the
+#                   NIM engine plus the local Ollama contingency, Langfuse traces, egress gateway and air-gap
+#   ./scripts/smoke-test.sh alone runs on the current data (diagnostics only: the simulator consumes stock).
+#   SMOKE_RAG=0 make smoke skips the LLM calls; they also skip until `make models` was run.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 if [[ -f .env ]]; then set -a; source .env; set +a; fi
@@ -27,27 +29,65 @@ egress_blocked() {  # $1 service: tries to open a TCP connection to the Internet
     </dev/null >/dev/null 2>&1
   [[ $? -ne 0 ]]
 }
-rag_check() {  # $1 language, $2 expected top document, $3 expected SAP transaction, $4 question, $5… JSON fragments
-  local language=$1 doc=$2 tcode=$3 question=$4 response top detected guard declared cited missing=()
-  shift 4
+egress_probe() {  # $1 URL fetched from the backend through the egress gateway (HTTPS_PROXY) → HTTP status or refusal
+  $DC exec -T backend python -c '
+import sys, httpx
+try:
+    print(httpx.get(sys.argv[1], timeout=15).status_code)
+except httpx.ProxyError as exc:
+    print("denegado por el gateway:", exc)
+except Exception as exc:
+    print("sin ruta:", type(exc).__name__)' "$1" </dev/null 2>/dev/null
+}
+trace_check() {  # $1 trace id, $2 model: the trace reaches Langfuse with the operator as user_id and the LLM generations
+  local trace="" generations=0 spans=0 user=${TRACE_USER_ID:-operador_br@nodara.com}
+  for _ in $(seq 1 15); do  # the SDK ships events in the background
+    trace=$(curl -fsS -u "$LANGFUSE_PUBLIC_KEY:$LANGFUSE_SECRET_KEY" \
+      "http://127.0.0.1:${LANGFUSE_PORT:-3001}/api/public/traces/$1" 2>/dev/null)
+    generations=$(grep -o '"type":"GENERATION"' <<<"$trace" | wc -l)
+    spans=$(grep -o '"type":"SPAN"' <<<"$trace" | wc -l)
+    [[ $trace == *"\"name\":\"answer · $2\""* && $spans -ge 2 ]] && break
+    sleep 2
+  done
+  # English questions skip the translation, so the answer generation is the only mandatory one.
+  if [[ $trace == *"\"userId\":\"$user\""* && $trace == *"\"name\":\"answer · $2\""* && $spans -ge 2 ]]; then
+    ok "Langfuse: traza ${1:0:8}… userId=$user · $generations generación(es) ($2) + $spans spans (retrieval, SAP)"
+  else
+    ko "Langfuse: traza '$1' incompleta (userId $user, $generations generaciones, $spans spans): ${trace:0:160}"
+  fi
+}
+rag_check() {  # $1 engine, $2 language, $3 expected top document, $4 expected SAP transaction, $5 question, $6… JSON fragments
+  local engine=$1 language=$2 doc=$3 tcode=$4 question=$5 response start tenths took top detected guard declared cited model trace missing=()
+  shift 5
+  start=$(date +%s%N)
   response=$(curl -fsS --max-time 600 -X POST -H 'content-type: application/json' \
-    -d "{\"question\":\"$question\",\"language\":\"$language\"}" "http://127.0.0.1:${FRONTEND_PORT:-3000}/api/ask" 2>/dev/null)
+    -d "{\"question\":\"$question\",\"language\":\"$language\",\"engine\":\"$engine\"}" \
+    "http://127.0.0.1:${FRONTEND_PORT:-3000}/api/ask" 2>/dev/null)
+  tenths=$(( ($(date +%s%N) - start) / 100000000 ))
+  took="$((tenths / 10)).$((tenths % 10)) s"
+  [[ $engine == nim && $tenths -gt 150 ]] && took+=" (sobre el objetivo de 15 s)"
   top=$(grep -o '"doc_id":"[^"]*"' <<<"$response" | head -1 | cut -d'"' -f4)
   detected=$(grep -o '"detected":"[a-z]*"' <<<"$response" | cut -d'"' -f4)
   guard=$(grep -o '"status":"[a-z]*"' <<<"$response" | tail -1 | cut -d'"' -f4)
   declared=$(grep -o '"declared":\[[^]]*\]' <<<"$response" | grep -o '[A-Z0-9]\{3,\}' | tr '\n' ' ')
   cited=$(grep -o '"cited":\[[^]]*\]' <<<"$response" | grep -o '[A-Z0-9]\{3,\}' | tr '\n' ' ')
+  model=$(grep -o '"model_used":"[^"]*"' <<<"$response" | cut -d'"' -f4)
+  trace=$(grep -o '"trace_id":"[^"]*"' <<<"$response" | cut -d'"' -f4)
   for fragment in "$@"; do [[ $response == *"$fragment"* ]] || missing+=("$fragment"); done
-  if [[ $top == "$doc" && $detected == "${language,,}" && " $declared" == *" $tcode "* && ${#missing[@]} -eq 0 ]]; then
-    ok "RAG $language → $doc · respuesta en '$detected' (control de idioma: $guard) · transacción prescrita $tcode" \
-       "(citada en el texto: $([[ " $cited" == *" $tcode "* ]] && echo sí || echo no)) · evidencia SAP"
+  if [[ $top == "$doc" && $detected == "${language,,}" && " $declared" == *" $tcode "* && $model == "$engine/"*
+        && ${#missing[@]} -eq 0 ]]; then
+    ok "RAG $language · $model en $took → $doc · respuesta en '$detected' (control de idioma: $guard) ·" \
+       "transacción prescrita $tcode (citada en el texto: $([[ " $cited" == *" $tcode "* ]] && echo sí || echo no)) · evidencia SAP"
+    trace_check "$trace" "$model"
   else
-    ko "RAG $language → top='$top' idioma='$detected' prescritas='$declared' faltan: ${missing[*]:-ninguno} ${response:0:160}"
+    ko "RAG $language/$engine → modelo='${model:-ninguno}' top='$top' idioma='$detected' prescritas='$declared'" \
+       "faltan: ${missing[*]:-ninguno} ${response:0:200}"
   fi
 }
 
 step "1 · Contenedores y salud"
-for svc in s4hana-db kafka debezium minio unity-catalog trino delta-sink vector-db ollama backend frontend; do
+for svc in s4hana-db kafka debezium minio unity-catalog trino delta-sink vector-db ollama egress-proxy langfuse-db \
+           langfuse backend frontend; do
   health=$($DC ps --format '{{.Health}}' "$svc" 2>/dev/null)
   [[ $health == healthy ]] && ok "$svc healthy" || ko "$svc → ${health:-no está corriendo}"
 done
@@ -64,6 +104,11 @@ matdoc=$(s4 "SELECT count(*) FROM sap.matdoc")
 [[ ${tables:-0} -ge 8 ]] && ok "$tables tablas SAP: $counts" || ko "tablas SAP: ${tables:-0}"
 [[ $(s4 "SELECT count(*) FROM (SELECT belnr FROM sap.acdoca GROUP BY belnr HAVING sum(hsl) <> 0 OR sum(wsl) <> 0) x") == 0 ]] \
   && ok "ACDOCA cuadrado por documento (Σ HSL = Σ WSL = 0)" || ko "ACDOCA descuadrado"
+IFS='|' read -r fx_lines fx_off fx_rates < <(s4 "SELECT count(*), count(*) FILTER (WHERE hsl <> round(wsl * sap.fx_rate(rwcur, rhcur, budat), 2)),
+  count(DISTINCT round(hsl / nullif(wsl, 0), 5)) FROM sap.acdoca WHERE rwcur <> rhcur")
+[[ ${fx_lines:-0} -gt 0 && $fx_off == 0 && ${fx_rates:-0} -gt 1 ]] \
+  && ok "partidas USD convertidas con TCURR a la fecha de contabilización ($fx_lines partidas, $fx_rates tasas distintas, sin tasa fija)" \
+  || ko "conversión USD→BRL: ${fx_off:-?} de ${fx_lines:-0} partidas fuera de TCURR, ${fx_rates:-0} tasas"
 [[ $published == "$tables" ]] && ok "publicación CDC nodara_s4_pub cubre las $published tablas" || ko "publicación CDC: $published de $tables tablas"
 
 step "3 · Casos de negocio C-Level (seed estricto)"
@@ -153,31 +198,60 @@ chunks=$(kb "SELECT count(*) FROM kb.chunks")
 docker network inspect nodara-kb -f '{{range .Containers}}{{.Name}} {{end}}' | grep -qv 'trino\|kafka\|debezium' \
   && ok "segmento nodara-kb exclusivo: $(docker network inspect nodara-kb -f '{{range .Containers}}{{.Name}} {{end}}')" || ko "nodara-kb compartido con servicios ajenos"
 
-step "9 · Operador → frontend → backend → IA (ruteo de idioma)"
+step "9 · Operador → frontend → backend → IA (motor NIM / Ollama, ruteo de idioma, Langfuse)"
 home=$(curl -fsS "http://127.0.0.1:${FRONTEND_PORT:-3000}/" 2>/dev/null)
 [[ -n $home ]] && ok "frontend HTTP 200 en 127.0.0.1:${FRONTEND_PORT:-3000}" || ko "frontend sin respuesta"
-[[ $home == *'aria-label="Español"'* && $home == *'aria-label="English"'* && $home == *'aria-label="Português"'* ]] \
-  && ok "selector de idioma ES/EN/PT desplegado (comportamiento: make ui-test)" || ko "selector de idioma ausente en el frontend"
+[[ $home == *'aria-label="Español"'* && $home == *'aria-label="English"'* && $home == *'aria-label="Português"'* &&
+   $home == *'NVIDIA NIM (Cloud)'* && $home == *'Ollama (Local)'* ]] \
+  && ok "selectores de idioma (ES/EN/PT) y de motor (NVIDIA NIM / Ollama) desplegados (comportamiento: make ui-test)" \
+  || ko "selector de idioma o de motor ausente en el frontend"
 status_json=$(api status 2>/dev/null)
 [[ $status_json == *'"s4hana_live":{"ok":true'* ]] && ok "backend vía proxy /api/status (S/4 live OK)" || ko "backend /api/status: ${status_json:0:200}"
+[[ $status_json == *'"observability":{"ok":true'* ]] && ok "Langfuse v2 autenticado con las API keys de .env" || ko "Langfuse sin autenticar"
+nim=0 ollama=0
+[[ $status_json == *'"chat_ready":true'* ]] && ollama=1
+if [[ $status_json == *'"configured":true'* ]]; then
+  [[ $status_json == *'"reachable":true'*'"listed":true'* ]] \
+    && { nim=1; ok "NVIDIA NIM alcanzable vía egress-proxy: modelo ${NIM_MODEL:-openai/gpt-oss-20b} habilitado para la cuenta"; } \
+    || ko "NVIDIA NIM configurado pero inalcanzable o modelo no habilitado: $(grep -o '"nim":{[^}]*}' <<<"$status_json")"
+else
+  skip "NVIDIA NIM sin configurar (NVIDIA_API_KEY vacío): los casos corren sobre Ollama local"
+fi
 if [[ ${SMOKE_RAG:-1} == 0 ]]; then
   skip "RAG E2E omitido (SMOKE_RAG=0)"
-elif [[ $status_json == *'"chat_ready":true'*'"embed_ready":true'* ]]; then
-  rag_check ES AU-CMP-KYC-001 XD01 "El cliente refinador está bloqueado por límite de crédito. ¿Qué necesito para regularizarlo según el estándar KYC?" \
-    '"xblocked":"X"' '"credit_limit":5000000.0' '"cnpj":"11.222.333/0001-81"'
-  rag_check EN AU-LIX-SOP-002 IW31 "The leaching acid pump failed after the tropical storm. Is there already an open order and do we have spare SKU-BR-ACID-9902?" \
+elif [[ $status_json == *'"embed_ready":true'* ]] && (( nim || ollama )); then
+  engine=$( (( nim )) && echo nim || echo ollama )
+  rag_check $engine ES AU-CMP-KYC-001 XD01 "El cliente refinador está bloqueado por límite de crédito. ¿Qué necesito para regularizarlo según el estándar KYC?" \
+    '"xblocked":"X"' '"credit_limit":5000000.0' '"cnpj":"11.222.333/0001-81"' '"fx_revaluation_brl":'
+  rag_check $engine EN AU-LIX-SOP-002 IW31 "The leaching acid pump failed after the tropical storm. Is there already an open order and do we have spare SKU-BR-ACID-9902?" \
     '"aufnr":"4000200101"' '"matnr":"SKU-BR-ACID-9902"' '"stock_qty":0.0' '"open_qty":1.0'
-  rag_check PT AU-FLO-STR-003 MIGO "O teor do minério caiu. Como ajustar a dosagem de xantato para 15 g/t e o estoque do Depósito 002 é suficiente?" \
+  rag_check $engine PT AU-FLO-STR-003 MIGO "O teor do minério caiu. Como ajustar a dosagem de xantato para 15 g/t e o estoque do Depósito 002 é suficiente?" \
     '"matnr":"SKU-BR-REAG-4410"' '"lgort":"0002"' '"tcode2":"MIGO"'
+  if (( nim && ollama )); then  # local contingency engine (no data leaves the enclave)
+    rag_check ollama PT AU-FLO-STR-003 MIGO "O teor do minério caiu. Como ajustar a dosagem de xantato para 15 g/t e o estoque do Depósito 002 é suficiente?" \
+      '"matnr":"SKU-BR-REAG-4410"' '"lgort":"0002"'
+  fi
 else
   skip "RAG E2E omitido: modelos aún no importados (make models && make embed)"
 fi
 
-step "10 · Air-gap"
+step "10 · Air-gap y salida controlada (egress-proxy)"
 [[ $(docker network inspect nodara-net -f '{{.Internal}}') == true ]] && ok "red nodara-net internal=true" || ko "nodara-net no es internal"
 for svc in ollama backend delta-sink kafka; do
-  egress_blocked "$svc" && ok "$svc sin salida a Internet" || ko "$svc TIENE salida a Internet"
+  egress_blocked "$svc" && ok "$svc sin salida directa a Internet" || ko "$svc TIENE salida directa a Internet"
 done
+egress_net=$(docker network inspect nodara-egress -f '{{range .Containers}}{{.Name}} {{end}}' 2>/dev/null)
+[[ $egress_net == "nodara-egress-proxy " ]] && ok "red nodara-egress exclusiva del gateway" || ko "nodara-egress compartida: '$egress_net'"
+for url in https://integrate.api.nvidia.com/v1/models https://api.fxratesapi.com/latest; do
+  result=$(egress_probe "$url")
+  [[ $result =~ ^[0-9]+$ ]] && ok "allowlist: backend → gateway → ${url#https://} (HTTP $result)" || ko "allowlist: ${url#https://} → ${result:-sin respuesta}"
+done
+for url in https://pypi.org/simple/ https://example.com/ http://example.com/; do
+  result=$(egress_probe "$url")
+  [[ $result == denegado* || $result == "sin ruta"* ]] && ok "fuera de la allowlist: ${url} → $result" || ko "${url} accesible desde el backend (${result:-?})"
+done
+fx=$($DC exec -T backend python -c 'from app.fx import usd_brl; q = usd_brl(); print(q["rate"], q["source"], q["as_of"])' </dev/null 2>/dev/null)
+[[ $fx =~ ^[0-9]+\.[0-9]+[[:space:]] ]] && ok "FX en vivo vía gateway (sin tasa fija): USD/BRL $fx" || ko "FX en vivo no disponible: ${fx:-sin respuesta}"
 
 printf '\n\033[1mResultado: %d OK, %d fallos\033[0m\n' "$PASS" "$FAIL"
 (( FAIL == 0 ))

@@ -8,6 +8,7 @@
 --   ACDOCA        Universal Journal (FI/CO line items, incl. customer open items)
 --   QMEL / AUFK   Plant Maintenance: notifications / orders (AFIH equipment flattened into AUFK)
 --   RESB          Reservations / dependent requirements of maintenance orders
+--   TCURR         Exchange rates (type M) used to post foreign-currency documents
 -- Company code BR01 · plants BR10 flotation and BR20 leaching (Carajás, PA).
 -- ═══════════════════════════════════════════════════════════════════════════
 CREATE SCHEMA sap;
@@ -187,6 +188,28 @@ CREATE TABLE sap.resb (
     PRIMARY KEY (mandt, rsnum, rspos)
 );
 COMMENT ON TABLE sap.resb IS 'Reservations of maintenance orders (open = bdmng > enmng)';
+
+-- TCURR · Exchange rates ─────────────────────────────────────────────────────
+CREATE TABLE sap.tcurr (
+    mandt char(3)       NOT NULL DEFAULT '100',
+    kurst varchar(4)    NOT NULL,                     -- exchange rate type: M = average rate
+    fcurr varchar(5)    NOT NULL,                     -- from currency
+    tcurr varchar(5)    NOT NULL,                     -- to currency
+    gdatu date          NOT NULL,                     -- valid from (SAP stores it inverted; plain date here)
+    ukurs numeric(9,5)  NOT NULL,                     -- exchange rate
+    PRIMARY KEY (mandt, kurst, fcurr, tcurr, gdatu)
+);
+COMMENT ON TABLE sap.tcurr IS 'Exchange rates: foreign-currency postings use the rate valid on the posting date';
+
+-- Rate valid on a date, as S/4 translates foreign-currency postings (no fixed rates).
+CREATE FUNCTION sap.fx_rate(p_from varchar, p_to varchar, p_date date, p_type varchar DEFAULT 'M')
+RETURNS numeric
+LANGUAGE sql STABLE AS $$
+    SELECT t.ukurs FROM sap.tcurr t
+     WHERE t.kurst = p_type AND t.fcurr = p_from AND t.tcurr = p_to AND t.gdatu <= p_date
+     ORDER BY t.gdatu DESC
+     LIMIT 1
+$$;
 
 -- Number ranges (seed documents use 49000020xx / 49000030xx) ────────────────
 CREATE SEQUENCE sap.matdoc_number_seq START 4900004001;

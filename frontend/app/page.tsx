@@ -2,9 +2,11 @@
 
 import { FormEvent, useEffect, useState } from "react";
 
-import { Header, type Status } from "./components/Header";
+import { AnswerMeta, type AnswerMetadata } from "./components/AnswerMeta";
+import { EngineSwitcher } from "./components/EngineSwitcher";
+import { Header, nimConfigured, type Status } from "./components/Header";
 import { SapEvidence, type SapData } from "./components/SapEvidence";
-import { useI18n } from "./i18n";
+import { useI18n, type Engine } from "./i18n";
 
 type Source = {
   doc_id: string;
@@ -15,30 +17,29 @@ type Source = {
   similarity: number;
   excerpt: string;
 };
-type AskResult = {
-  answer: string;
-  language: string;
-  language_check: { requested: string; detected: string | null; status: string };
-  grounding_check: { declared: string[]; cited: string[]; removed: string[] };
-  question_en: string;
-  sources: Source[];
-  sap: SapData;
-  models: Record<string, string>;
-  timings_ms: Record<string, number>;
-};
+type AskResult = AnswerMetadata & { answer: string; sources: Source[]; sap: SapData };
 
+const ENGINE_KEY = "nodara.engine";
 const PANEL = "rounded-xl border border-slate-800 bg-slate-900/60 p-5";
 const PANEL_TITLE = "text-sm font-semibold uppercase tracking-wide text-sky-400";
 
 export default function Home() {
   const { language, t } = useI18n();
   const [question, setQuestion] = useState("");
+  const [engine, setEngineState] = useState<Engine>("nim");
   const [status, setStatus] = useState<Status>();
   const [result, setResult] = useState<AskResult>();
   const [error, setError] = useState<string>();
   const [loading, setLoading] = useState(false);
+  const nimAvailable = !status || nimConfigured(status.llm);
 
   useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(ENGINE_KEY);
+      if (saved === "nim" || saved === "ollama") setEngineState(saved);
+    } catch {
+      // storage unavailable: keep the default engine
+    }
     const load = () =>
       fetch("/api/status", { cache: "no-store" })
         .then((r) => r.json())
@@ -49,23 +50,44 @@ export default function Home() {
     return () => clearInterval(id);
   }, []);
 
+  useEffect(() => {
+    if (!nimAvailable && engine === "nim") setEngineState("ollama");
+  }, [nimAvailable, engine]);
+
+  function setEngine(next: Engine) {
+    setEngineState(next);
+    try {
+      window.localStorage.setItem(ENGINE_KEY, next);
+    } catch {
+      // not persisted, still applied for this session
+    }
+  }
+
   async function ask(event: FormEvent) {
     event.preventDefault();
     setLoading(true);
     setError(undefined);
     setResult(undefined);
     try {
-      // Language routing: the backend answers exactly in the language selected in the UI.
+      // Engine + language routing: the backend answers with the selected engine, exactly in the UI language.
       const response = await fetch("/api/ask", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ question, language: language.toUpperCase() }),
+        body: JSON.stringify({ question, language: language.toUpperCase(), engine }),
       });
-      const body = await response.json();
-      if (!response.ok) throw new Error(typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail));
+      const body = await response.json().catch(() => ({ code: "backend_unavailable" }));
+      if (!response.ok) {
+        throw new Error(
+          body.code === "backend_unavailable"
+            ? t.errors.backendUnavailable
+            : typeof body.detail === "string"
+              ? body.detail
+              : t.errors.invalidRequest,
+        );
+      }
       setResult(body);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(err instanceof Error ? err.message : t.errors.backendUnavailable);
     } finally {
       setLoading(false);
     }
@@ -76,7 +98,10 @@ export default function Home() {
       <Header status={status} />
 
       <form onSubmit={ask} className="mt-8 rounded-xl border border-slate-800 bg-slate-900/60 p-4">
-        <label htmlFor="question" className="text-sm font-medium text-slate-300">{t.form.label}</label>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <label htmlFor="question" className="text-sm font-medium text-slate-300">{t.form.label}</label>
+          <EngineSwitcher engine={engine} onChange={setEngine} nimAvailable={nimAvailable} />
+        </div>
         <textarea
           id="question"
           value={question}
@@ -115,25 +140,7 @@ export default function Home() {
           {result ? (
             <>
               <div data-testid="answer" className="mt-3 whitespace-pre-wrap text-sm leading-relaxed">{result.answer}</div>
-              {result.grounding_check?.declared.length ? (
-                <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
-                  <span className="text-slate-400">{t.answer.transactions}:</span>
-                  {result.grounding_check.declared.map((code) => (
-                    <span
-                      key={code}
-                      className={`rounded px-2 py-0.5 font-mono ${result.grounding_check.cited.includes(code) ? "bg-emerald-900/50 text-emerald-200" : "border border-emerald-800 text-emerald-300"}`}
-                    >
-                      {result.grounding_check.cited.includes(code) ? "✓ " : ""}
-                      {code}
-                    </span>
-                  ))}
-                </div>
-              ) : null}
-              <p className="mt-4 text-xs text-slate-500">
-                {t.answer.language}: {result.language.toUpperCase()}
-                {result.language_check.status === "corrected" ? ` (${t.answer.corrected})` : ""} · {t.answer.search}: “
-                {result.question_en}” · {result.models.chat} · {Object.values(result.timings_ms).reduce((a, b) => a + b, 0)} ms
-              </p>
+              <AnswerMeta result={result} />
             </>
           ) : (
             <p className="mt-3 text-sm text-slate-500">{t.answer.empty}</p>

@@ -44,13 +44,19 @@ export type CounterpartyRow = {
   max_days_overdue: number | null;
   cnpj: string | null;
   inscricao_estadual: string | null;
+  booked_local?: number;
+  local_currency?: string | null;
+  exposure_brl_live?: number;
+  fx_revaluation_brl?: number;
 };
+export type FxQuote = { pair: string; rate?: number; as_of?: string; source?: string; error?: string };
 export type SapData = {
   materials: Record<string, Material>;
   stock: StockRow[];
   reservations: ReservationRow[];
   orders: OrderRow[];
   counterparties: CounterpartyRow[];
+  fx?: FxQuote | null;
 };
 
 const PANEL = "rounded-xl border border-slate-800 bg-slate-900/60 p-5";
@@ -98,6 +104,26 @@ export function SapEvidence({ sap }: { sap?: SapData }) {
                 <dt className="text-slate-400">{t.credit.ie}</dt>
                 <dd className="text-right font-mono">{c.inscricao_estadual ?? "—"}</dd>
               </dl>
+              {c.exposure_brl_live !== undefined && sap.fx?.rate ? (
+                <dl data-testid="credit-fx" className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1 border-t border-slate-800 pt-2">
+                  <dt className="text-slate-400">{t.credit.fx}</dt>
+                  <dd className="text-right font-mono">
+                    {new Intl.NumberFormat(t.locale, { maximumFractionDigits: 4 }).format(sap.fx.rate)}
+                    <div className="font-sans text-slate-500">{t.credit.fxSource(sap.fx.source, sap.fx.as_of?.slice(0, 16).replace("T", " "))}</div>
+                  </dd>
+                  <dt className="text-slate-400">{t.credit.liveBrl}</dt>
+                  <dd className="text-right font-semibold">{money(c.exposure_brl_live, "BRL")}</dd>
+                  <dt className="text-slate-400">{t.credit.bookedBrl}</dt>
+                  <dd className="text-right">{money(c.booked_local ?? 0, "BRL")}</dd>
+                  <dt className="text-slate-400">{t.credit.revaluation}</dt>
+                  <dd className={`text-right ${(c.fx_revaluation_brl ?? 0) > 0 ? "text-amber-300" : "text-emerald-300"}`}>
+                    {(c.fx_revaluation_brl ?? 0) > 0 ? "+" : ""}
+                    {money(c.fx_revaluation_brl ?? 0, "BRL")}
+                  </dd>
+                </dl>
+              ) : sap.fx?.error ? (
+                <p className="mt-2 text-amber-300">{t.credit.fxUnavailable}</p>
+              ) : null}
             </div>
           ))}
         </div>

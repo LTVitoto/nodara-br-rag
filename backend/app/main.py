@@ -9,7 +9,7 @@ from typing import Annotated
 from fastapi import FastAPI, Query, Request
 from fastapi.responses import JSONResponse
 
-from . import knowledge, lakehouse, llm
+from . import knowledge, lakehouse, llm, observability
 from .orchestrator import KnowledgeBaseEmpty, answer_question
 from .schemas import AskRequest, AskResponse, EmbedResponse
 from .settings import get_settings
@@ -23,10 +23,11 @@ async def lifespan(_: FastAPI):
     knowledge.open_pool()
     threading.Thread(target=llm.warm_up, name="model-warm-up", daemon=True).start()
     yield
+    observability.flush()
     knowledge.close_pool()
 
 
-app = FastAPI(title="Nodara BR-RAG Orchestrator", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="Nodara BR-RAG Orchestrator", version="0.4.0", lifespan=lifespan)
 
 
 @app.exception_handler(llm.ModelUnavailable)
@@ -51,13 +52,19 @@ def _probe(check) -> dict:
         return {"ok": False, "error": str(exc)[:300]}
 
 
+def _engines() -> dict:
+    return {"default_engine": get_settings().llm_default_engine, "nim": llm.nim_status(),
+            "ollama": _probe(llm.model_status)}
+
+
 @app.get("/api/v1/status")
 def status() -> dict:
-    """Dependency map for the operator console: KB, live S/4, lakehouse CDC, local LLM."""
+    """Dependency map for the operator console: KB, live S/4, lakehouse CDC, LLM engines, tracing."""
     return {"knowledge_base": _probe(knowledge.stats),
             "s4hana_live": _probe(lakehouse.s4_live_summary),
             "lakehouse_cdc": _probe(lakehouse.cdc_freshness),
-            "llm": _probe(llm.model_status)}
+            "llm": _probe(_engines),
+            "observability": {"ok": observability.healthy(), "langfuse_url": get_settings().langfuse_public_url}}
 
 
 @app.post("/api/v1/kb/embed", response_model=EmbedResponse)
@@ -78,8 +85,10 @@ def embed_knowledge_base() -> EmbedResponse:
 
 @app.post("/api/v1/ask", response_model=AskResponse)
 def ask(request: AskRequest) -> dict:
-    """RAG answer in the requested language (ES / EN / PT), cross-checked with live SAP data."""
-    return answer_question(request.question, request.language, request.top_k)
+    """RAG answer in the requested language (ES / EN / PT) from the selected engine, cross-checked with
+    live SAP data and traced in Langfuse."""
+    return answer_question(request.question, request.language,
+                           request.engine or get_settings().llm_default_engine, request.top_k)
 
 
 @app.get("/api/v1/sap/stock")

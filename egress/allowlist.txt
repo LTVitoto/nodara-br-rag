@@ -1,0 +1,6 @@
+# Domains allowed to leave the enclave (one per line, exact match). Changes require Architect approval.
+# NVIDIA NIM (cloud LLM engine)
+integrate.api.nvidia.com
+# Live FX for credit evaluation: primary and fallback (ECB reference rates)
+api.fxratesapi.com
+api.frankfurter.dev

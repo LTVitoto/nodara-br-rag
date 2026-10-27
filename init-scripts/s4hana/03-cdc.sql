@@ -9,9 +9,11 @@ ALTER TABLE sap.acdoca        REPLICA IDENTITY FULL;
 ALTER TABLE sap.qmel          REPLICA IDENTITY FULL;
 ALTER TABLE sap.aufk          REPLICA IDENTITY FULL;
 ALTER TABLE sap.resb          REPLICA IDENTITY FULL;
+ALTER TABLE sap.tcurr         REPLICA IDENTITY FULL;
 
 CREATE PUBLICATION nodara_s4_pub FOR TABLE
-    sap.but000, sap.ukmbp_cms_sgm, sap.dfkkbptaxnum, sap.matdoc, sap.acdoca, sap.qmel, sap.aufk, sap.resb;
+    sap.but000, sap.ukmbp_cms_sgm, sap.dfkkbptaxnum, sap.matdoc, sap.acdoca, sap.qmel, sap.aufk, sap.resb,
+    sap.tcurr;
 
 GRANT USAGE ON SCHEMA sap TO debezium, trino_ro;
 GRANT SELECT ON ALL TABLES IN SCHEMA sap TO debezium, trino_ro;

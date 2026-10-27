@@ -5,11 +5,13 @@ export
 
 COMPOSE ?= docker compose
 FRONTEND_PORT ?= 3000
+LANGFUSE_PORT ?= 3001
 n ?= 5
 
 .DEFAULT_GOAL := help
-.PHONY: help env preflight config up down ps logs models embed kb-seed simulate smoke ui-test reset-data clean
+.PHONY: help env preflight config up down ps logs models embed kb-seed simulate fresh smoke demo ui-test reset-data clean
 DATA_VOLUMES := s4hana-data vector-data kafka-data minio-data unity-catalog-db
+RESET_LOG := .reset.log
 
 help: ## Lista los comandos disponibles
 	@grep -hE '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
@@ -48,10 +50,23 @@ kb-seed: ## Regenera el seed de pgvector desde knowledge/ (originales + curació
 simulate: ## Genera actividad SAP en S/4 para ver el CDC (ej.: make simulate n=10)
 	@$(COMPOSE) exec -T s4hana-db psql -U "$(S4_DB_ADMIN_USER)" -d s4hana -c "SELECT * FROM sap.simulate_activity($(n));"
 
-smoke: ## QA E2E: salud, CDC→Delta, raw layer + linaje, federación Trino, KB, IA y air-gap
+# Idempotencia: smoke y demo parten siempre del seed (el simulador y las pruebas consumen xantato).
+# Las trazas de Langfuse y los modelos de Ollama sobreviven al reset.
+fresh: ## Re-siembra en silencio (reset-data → up → embed); detalle en .reset.log
+	@printf 'Re-sembrando datos desde cero (reset-data → up → embed · log: %s)… ' "$(RESET_LOG)"
+	@start=$$(date +%s); \
+	{ $(MAKE) --no-print-directory reset-data && $(MAKE) --no-print-directory up && \
+	  { $(MAKE) --no-print-directory embed || echo "embed omitido: modelos sin importar (make models)"; }; } >$(RESET_LOG) 2>&1 \
+	  && echo "listo en $$(( $$(date +%s) - start )) s" \
+	  || { echo "FALLÓ"; tail -n 30 $(RESET_LOG); exit 1; }
+
+smoke: fresh ## QA E2E sobre datos recién sembrados: salud, CDC→Delta, raw, Trino, KB, IA, Langfuse y egress
 	@./scripts/smoke-test.sh
 
-ui-test: ## QA UI: selector de idioma ES/EN/PT con Playwright (perfil qa)
+demo: fresh ## Stack recién sembrado para una demo (casos y stock en su estado inicial)
+	@echo "Consola del operador: http://localhost:$(FRONTEND_PORT) · Trazas (Langfuse): http://localhost:$(LANGFUSE_PORT)"
+
+ui-test: ## QA UI: idioma ES/EN/PT, motor NIM/Ollama y metadatos de la respuesta (Playwright, perfil qa)
 	$(COMPOSE) --profile qa run --rm --build --no-deps ui-test
 
 reset-data: ## Re-siembra desde cero: borra volúmenes de datos (conserva modelos Ollama)

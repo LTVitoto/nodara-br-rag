@@ -6,6 +6,19 @@ import { LanguageSwitcher } from "./LanguageSwitcher";
 export type Probe = { ok: boolean; error?: string } & Record<string, unknown>;
 export type Status = { knowledge_base: Probe; s4hana_live: Probe; lakehouse_cdc: Probe; llm: Probe };
 
+type NimStatus = { configured?: boolean; reachable?: boolean; listed?: boolean };
+type OllamaStatus = { ok?: boolean; chat_ready?: boolean; embed_ready?: boolean };
+
+export const nimReady = (llm?: Probe) => {
+  const nim = llm?.nim as NimStatus | undefined;
+  return Boolean(nim?.configured && nim.reachable && nim.listed);
+};
+export const nimConfigured = (llm?: Probe) => Boolean((llm?.nim as NimStatus | undefined)?.configured);
+export const ollamaReady = (llm?: Probe) => {
+  const ollama = llm?.ollama as OllamaStatus | undefined;
+  return Boolean(ollama?.ok && ollama.chat_ready && ollama.embed_ready);
+};
+
 function Pill({ id, label, probe, detail }: { id: string; label: string; probe?: Probe; detail: (p: Probe) => string }) {
   const { t } = useI18n();
   const tone = !probe
@@ -42,12 +55,7 @@ export function Header({ status }: { status?: Status }) {
           probe={status?.knowledge_base}
           detail={(p) => t.status.manualsDetail(p.embedded, p.chunks)}
         />
-        <Pill
-          id="llm"
-          label={t.status.llm}
-          probe={status?.llm}
-          detail={(p) => (p.chat_ready && p.embed_ready ? String(p.chat_model) : t.status.pendingModels)}
-        />
+        <Pill id="llm" label={t.status.llm} probe={status?.llm} detail={(p) => t.status.enginesDetail(nimReady(p), ollamaReady(p))} />
       </div>
     </header>
   );

@@ -20,7 +20,8 @@ async function proxy(request: Request, context: { params: Promise<{ path: string
       headers: { "content-type": upstream.headers.get("content-type") ?? "application/json" },
     });
   } catch {
-    return Response.json({ detail: "Backend indisponível" }, { status: 502 });
+    // Localized by the UI (the proxy has no language context).
+    return Response.json({ code: "backend_unavailable" }, { status: 502 });
   }
 }
 
