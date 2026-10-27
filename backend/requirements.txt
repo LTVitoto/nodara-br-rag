@@ -1,0 +1,9 @@
+fastapi==0.162.0
+uvicorn==0.54.0
+pydantic-settings==2.16.1
+psycopg[binary]==3.3.6
+psycopg-pool==3.3.3
+trino==0.340.0
+langchain-core==1.7.0
+langchain-ollama==1.1.0
+httpx==0.28.1
